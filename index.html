@@ -1,1 +1,584 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Kelime Oyunu Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(180deg, #2ab5d4 0%, #1a7a96 50%, #0f5a72 100%);
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        /* ── HEADER ── */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px 10px;
+            flex-shrink: 0;
+        }
+
+        .close-btn {
+            width: 44px; height: 44px;
+            background: radial-gradient(circle at 38% 32%, #f05454, #c62828);
+            border: 3px solid #8b0000;
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            font-weight: 900;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+
+        .level-badge {
+            background: #f6c227;
+            color: #0d1b2e;
+            padding: 8px 26px;
+            border-radius: 10px;
+            font-size: 19px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+        }
+
+        /* ── WORD PANEL ── */
+        .word-panel {
+            background: #0a1520;
+            border-bottom: 2px solid rgba(255,255,255,0.08);
+            margin: 0;
+            border-radius: 0;
+            padding: 14px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            flex-shrink: 0;
+        }
+
+        /* Each row = one word's letter boxes */
+        .word-row {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        /* Individual letter cell – uniform size (based on 5-letter KATIL row) */
+        .letter-cell {
+            width: calc((100vw - 76px) / 5); /* 76px = 28px padding + 4×12px gap */
+            aspect-ratio: 1;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: clamp(20px, 7vw, 38px);
+            font-weight: 900;
+
+            /* Empty = indigo/purple */
+            background: #5252d4;
+            color: transparent;
+            box-shadow: inset 0 -4px 0 rgba(0,0,0,0.3);
+        }
+
+        /* Found = white card with dark letter */
+        .letter-cell.found {
+            background: white !important;
+            color: #0d1b2e !important;
+            box-shadow: inset 0 -4px 0 #b0b8c8 !important;
+        }
+
+        /* Pop animation when found */
+        @keyframes cellPop {
+            0%   { transform: scale(1); }
+            40%  { transform: scale(1.2); }
+            70%  { transform: scale(0.92); }
+            100% { transform: scale(1); }
+        }
+        .letter-cell.pop { animation: cellPop 0.35s ease; }
+
+        /* Shake for "already found" */
+        @keyframes rowShake {
+            0%,100% { transform: translateX(0); }
+            20%     { transform: translateX(-6px); }
+            40%     { transform: translateX(6px); }
+            60%     { transform: translateX(-4px); }
+            80%     { transform: translateX(4px); }
+        }
+        .word-row.shake { animation: rowShake 0.4s ease; }
+
+        /* ── CURRENT TYPED WORD ── */
+        .typing-bar {
+            height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .typing-text {
+            font-size: 26px;
+            font-weight: 900;
+            color: white;
+            letter-spacing: 10px;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            min-height: 1em;
+        }
+
+        /* ── CIRCLE AREA ── */
+        .circle-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            min-height: 0;
+        }
+
+        .circle-wrap {
+            position: relative;
+        }
+
+        .letter-circle {
+            width: min(320px, 82vw); height: min(320px, 82vw);
+            border-radius: 50%;
+            background: radial-gradient(circle at 50% 45%, #081525, #040c14);
+            box-shadow: inset 0 6px 28px rgba(0,0,0,0.6), 0 8px 24px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .line-svg {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 3;
+        }
+        .conn-line {
+            stroke: #f5c518;
+            stroke-width: 5;
+            stroke-linecap: round;
+            opacity: 0.75;
+        }
+
+        /* Letter nodes on the ring */
+        .letter-node {
+            position: absolute;
+            width: 54px; height: 54px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 30px;
+            font-weight: 900;
+            color: white;
+            cursor: pointer;
+            z-index: 5;
+            transition: transform 0.12s ease;
+        }
+        .letter-node.sel {
+            color: #f5c518;
+            text-shadow: 0 0 18px rgba(245,197,24,0.8);
+            transform: translate(-50%,-50%) scale(1.2) !important;
+        }
+
+        /* Hint – bottom-left of circle area */
+        .circle-area .btn-hint {
+            position: absolute;
+            left: 16px;
+            bottom: 20px;
+        }
+
+        .side-btn {
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+            transition: transform 0.18s ease;
+            position: relative;
+        }
+        .side-btn:active { transform: scale(0.88); }
+
+        .btn-shuffle {
+            background: radial-gradient(circle at 38% 32%, #f06292, #e91e74);
+            border: 3px solid #ad1457;
+            color: white;
+            box-shadow: 0 4px 12px rgba(233,30,116,0.45);
+        }
+        .btn-shuffle:active { transform: scale(0.88) rotate(180deg); }
+
+        .btn-hint {
+            background: radial-gradient(circle at 38% 32%, #4fc3f7, #0288d1);
+            border: 3px solid #01579b;
+            color: #fff176;
+            box-shadow: 0 4px 12px rgba(2,136,209,0.45);
+        }
+        .btn-hint::after {
+            content: attr(data-n);
+            position: absolute;
+            bottom: -4px; right: -4px;
+            width: 22px; height: 22px;
+            background: #f57c00;
+            border-radius: 50%;
+            font-size: 12px; font-weight: 900; color: white;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* ── TOAST ── */
+        .toast {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%,-50%) scale(0);
+            background: rgba(10,10,30,0.9);
+            color: white;
+            padding: 16px 36px;
+            border-radius: 14px;
+            font-size: 20px; font-weight: 900;
+            z-index: 400;
+            pointer-events: none;
+            transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        .toast.on { transform: translate(-50%,-50%) scale(1); }
+
+        /* ── LEVEL COMPLETE ── */
+        .win-screen {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(6px);
+            display: none;
+            flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 500;
+            color: white; text-align: center;
+            padding: 30px;
+        }
+        .win-screen.on { display: flex; }
+        .win-icon { font-size: 80px; animation: winPop 0.6s ease; }
+        .win-title { font-size: 34px; font-weight: 900; margin: 14px 0 6px; }
+        .win-sub   { font-size: 15px; opacity: 0.7; margin-bottom: 30px; }
+        .win-btn {
+            padding: 16px 52px;
+            border: none; border-radius: 30px;
+            font-size: 17px; font-weight: 900;
+            cursor: pointer; letter-spacing: 2px; text-transform: uppercase;
+            background: linear-gradient(145deg, #f39c12, #e67e22);
+            color: white;
+            box-shadow: 0 4px 18px rgba(243,156,18,0.5);
+            transition: transform 0.18s ease;
+        }
+        .win-btn:hover { transform: translateY(-2px); }
+        .win-note { margin-top: 18px; font-size: 12px; opacity: 0.4; }
+
+        @keyframes winPop {
+            0%   { transform: scale(0) rotate(-15deg); }
+            60%  { transform: scale(1.18) rotate(4deg); }
+            100% { transform: scale(1) rotate(0); }
+        }
+
+        /* responsive adjustments */
+        @media (max-height: 680px) {
+            .letter-circle { width: min(210px, 72vw); height: min(210px, 72vw); }
+            .letter-node   { width: 44px; height: 44px; font-size: 24px; }
+        }
+        @media (min-height: 850px) {
+            .letter-circle { width: min(340px, 88vw); height: min(340px, 88vw); }
+            .letter-node   { width: 62px; height: 62px; font-size: 34px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <div class="header">
+        <button class="close-btn" onclick="if(confirm('Cikis?'))location.reload()">&#10005;</button>
+        <div class="level-badge" id="lvlBadge">SEViYE 1</div>
+    </div>
+
+    <!-- WORD PANEL: letter cells per word -->
+    <div class="word-panel" id="wordPanel"></div>
+
+    <!-- TYPED WORD -->
+    <div class="typing-bar">
+        <span class="typing-text" id="typingText"></span>
+    </div>
+
+    <!-- CIRCLE + SIDE BUTTONS -->
+    <div class="circle-area">
+        <div class="circle-wrap">
+            <div class="letter-circle" id="letterCircle">
+                <svg class="line-svg" id="lineSvg"></svg>
+            </div>
+        </div>
+        <button class="side-btn btn-hint" id="hintBtn" data-n="2" title="Ipucu" onclick="doHint()">&#128161;</button>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <!-- WIN SCREEN (removed) -->
+
+<script>
+// ── DATA ──────────────────────────────────────────────
+const LEVEL = {
+    word: 'KATIL',
+    required: ['AL', 'KAT', 'KATIL'],
+    allValid: new Set([
+        'AK','AL','AT','LA','TA',
+        'AKI','ALT','KAL','KAT','KIL','KIT','LAK','TAK','TAL','TIK',
+        'AKIL','AKLI','ALIK','ALTI','ATIK','ATIL','ATKI','ATLI','KATI','KITA','TAKI','TALK',
+        'ALTIK','ITLAK','KALIT','KATLI','KITAL','KATIL'
+    ])
+};
+
+// ── STATE ─────────────────────────────────────────────
+let letters = [];        // [{char, x, y}]
+let selIdx  = [];        // selected node indices
+let found   = new Set(); // found required words
+let bonus   = new Set(); // found bonus words
+let hints   = 3;
+let dragging = false;
+
+// ── BOOT ─────────────────────────────────────────────
+function init() {
+    letters = LEVEL.word.split('').map(c => ({ char: c }));
+    shuffle(letters);
+    selIdx = [];
+    found.clear();
+    bonus.clear();
+    hints = 2;
+    document.getElementById('hintBtn').dataset.n = hints;
+
+    document.getElementById('typingText').textContent = '';
+    buildPanel();
+    buildCircle();
+}
+
+// ── WORD PANEL (letter cells) ─────────────────────────
+function buildPanel() {
+    const panel = document.getElementById('wordPanel');
+    panel.innerHTML = '';
+    LEVEL.required.forEach((word, wi) => {
+        const row = document.createElement('div');
+        row.className = 'word-row';
+        row.id = `row-${wi}`;
+        row.dataset.len = word.length;
+        word.split('').forEach((ch, ci) => {
+            const cell = document.createElement('div');
+            cell.className = 'letter-cell';
+            cell.id = `cell-${wi}-${ci}`;
+            cell.dataset.char = ch;  // store char, show only when found
+            cell.textContent = '';
+            row.appendChild(cell);
+        });
+        panel.appendChild(row);
+    });
+}
+
+// Reveal a row's cells with staggered pop
+function revealRow(wi) {
+    const word = LEVEL.required[wi];
+    word.split('').forEach((ch, ci) => {
+        setTimeout(() => {
+            const cell = document.getElementById(`cell-${wi}-${ci}`);
+            cell.textContent = cell.dataset.char;
+            cell.classList.add('found', 'pop');
+            setTimeout(() => cell.classList.remove('pop'), 400);
+        }, ci * 90);
+    });
+}
+
+// ── CIRCLE ────────────────────────────────────────────
+function buildCircle() {
+    const circle = document.getElementById('letterCircle');
+    circle.querySelectorAll('.letter-node').forEach(n => n.remove());
+
+    const r   = circle.offsetWidth;
+    const cx  = r / 2;
+    const cy  = r / 2;
+    const rad = cx * 0.60;
+    const n   = letters.length;
+
+    letters.forEach((l, i) => {
+        const angle = -Math.PI / 2 + (2 * Math.PI * i / n);
+        l.x = cx + rad * Math.cos(angle);
+        l.y = cy + rad * Math.sin(angle);
+
+        const node = document.createElement('div');
+        node.className = 'letter-node';
+        node.textContent = l.char;
+        node.dataset.i = i;
+        node.style.left = l.x + 'px';
+        node.style.top  = l.y + 'px';
+        node.style.transform = 'translate(-50%,-50%)';
+        circle.appendChild(node);
+    });
+    drawLines();
+}
+
+// ── INPUT ─────────────────────────────────────────────
+function setupInput() {
+    const circle = document.getElementById('letterCircle');
+
+    const hitNode = (cx, cy) => {
+        for (const node of circle.querySelectorAll('.letter-node')) {
+            const r  = node.getBoundingClientRect();
+            const mx = r.left + r.width  / 2;
+            const my = r.top  + r.height / 2;
+            const dx = cx - mx, dy = cy - my;
+            if (Math.sqrt(dx*dx + dy*dy) < 34) return +node.dataset.i;
+        }
+        return -1;
+    };
+
+    const start = (x, y) => {
+        dragging = true;
+        selIdx = [];
+        updateSel();
+        const i = hitNode(x, y);
+        if (i >= 0) pick(i);
+    };
+    const move = (x, y) => {
+        if (!dragging) return;
+        const i = hitNode(x, y);
+        if (i >= 0 && !selIdx.includes(i)) pick(i);
+    };
+    const end = () => {
+        if (!dragging) return;
+        dragging = false;
+        submit();
+    };
+
+    circle.addEventListener('mousedown',  e => { e.preventDefault(); start(e.clientX, e.clientY); });
+    document.addEventListener('mousemove',e => { if (dragging) { e.preventDefault(); move(e.clientX, e.clientY); } });
+    document.addEventListener('mouseup',  () => end());
+
+    circle.addEventListener('touchstart', e => { e.preventDefault(); start(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+    document.addEventListener('touchmove',e => { if (dragging) { e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY); } }, {passive:false});
+    document.addEventListener('touchend', () => end());
+}
+
+function pick(i) {
+    selIdx.push(i);
+    updateSel();
+}
+
+function updateSel() {
+    const circle = document.getElementById('letterCircle');
+    circle.querySelectorAll('.letter-node').forEach(node => {
+        const on = selIdx.includes(+node.dataset.i);
+        node.classList.toggle('sel', on);
+        node.style.transform = on ? 'translate(-50%,-50%) scale(1.2)' : 'translate(-50%,-50%)';
+    });
+    document.getElementById('typingText').textContent = selIdx.map(i => letters[i].char).join('');
+    drawLines();
+}
+
+function drawLines() {
+    const svg = document.getElementById('lineSvg');
+    svg.innerHTML = '';
+    for (let i = 1; i < selIdx.length; i++) {
+        const a = letters[selIdx[i-1]], b = letters[selIdx[i]];
+        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+        line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+        line.setAttribute('class','conn-line');
+        svg.appendChild(line);
+    }
+}
+
+// ── SUBMIT ────────────────────────────────────────────
+function submit() {
+    const word = selIdx.map(i => letters[i].char).join('');
+    selIdx = [];
+    updateSel();
+    document.getElementById('typingText').textContent = '';
+
+    if (word.length < 2) return;
+
+    const reqIdx = LEVEL.required.indexOf(word);
+
+    if (reqIdx >= 0 && !found.has(word)) {
+        found.add(word);
+        revealRow(reqIdx);
+        toast('Harika! ✓');
+        setTimeout(checkWin, 700);
+    } else if (found.has(word)) {
+        shakeRow(LEVEL.required.indexOf(word));
+        toast('Zaten bulundu');
+    } else if (LEVEL.allValid.has(word) && !bonus.has(word)) {
+        bonus.add(word);
+        toast('Bonus kelime!');
+    } else if (LEVEL.allValid.has(word) && bonus.has(word)) {
+        toast('Zaten bulundu');
+    }
+    // invalid = no feedback (same as original)
+}
+
+function shakeRow(wi) {
+    const row = document.getElementById(`row-${wi}`);
+    if (!row) return;
+    row.classList.add('shake');
+    setTimeout(() => row.classList.remove('shake'), 450);
+}
+
+function checkWin() {
+    if (found.size === LEVEL.required.length) {
+        setTimeout(() => window.close(), 600);
+    }
+}
+
+// ── SHUFFLE ───────────────────────────────────────────
+function doShuffle() {
+    shuffle(letters);
+    selIdx = [];
+    buildCircle();
+    document.getElementById('typingText').textContent = '';
+}
+
+// ── HINT ─────────────────────────────────────────────
+function doHint() {
+    if (hints <= 0) { toast('Ipucu kalmadi!'); return; }
+    const target = LEVEL.required.find(w => !found.has(w));
+    if (!target) return;
+    const wi = LEVEL.required.indexOf(target);
+
+    // Reveal the entire word automatically
+    found.add(target);
+    revealRow(wi);
+
+    hints--;
+    document.getElementById('hintBtn').dataset.n = hints;
+    toast('İpucu! ' + target);
+    setTimeout(checkWin, 700);
+}
+
+// ── RESET ─────────────────────────────────────────────
+function resetGame() {
+    init();
+}
+
+// ── TOAST ─────────────────────────────────────────────
+function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('on');
+    setTimeout(() => el.classList.remove('on'), 1300);
+}
+
+// ── UTILS ─────────────────────────────────────────────
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+}
+
+// ── START ─────────────────────────────────────────────
+setupInput();
+init();
+</script>
+</body>
+</html>
 
